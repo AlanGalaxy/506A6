@@ -1,0 +1,10 @@
+---
+title: "506Assignment6"
+author: "Jiaqi Sun"
+format: 
+  html:
+    embed-resources: true
+editor: visual
+---
+
+## Problem 1
