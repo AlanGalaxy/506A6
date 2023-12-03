@@ -7,4 +7,144 @@ format:
 editor: visual
 ---
 
+Github repository: [Github](https://github.com/AlanGalaxy/506A6)
+
 ## Problem 1
+
+Load the packages and the data.
+
+```{r}
+library(nycflights13)
+library(rsample)
+library(dplyr)
+data(flights)
+
+# delete the NA rows
+flights <- na.omit(flights)
+# select useful columns
+flights <- flights %>% 
+  select(dest, origin, air_time)
+flights <- as.data.frame(flights)
+# set as factor
+flights$dest <- as.factor(flights$dest)
+
+# number of bootstrap samples
+reps <- 1000
+```
+
+```{r}
+#' Generate a stratified bootstrap sample
+#'
+#' @param dat: input data
+#'
+#' @return: a stratified bootstrap sample
+strat_sampling <- function(dat) {
+  # store the new stratified bootstrap sample
+  bootstrap_sample <- data.frame()
+  
+  # get each category and sample from it
+  for (i in unique(dat$dest)) {
+    sample_i <- dat[dat$dest == i, ]
+    bootstrap_i <- sample_i[sample(nrow(sample_i), replace = TRUE), ]
+    bootstrap_sample <- rbind(bootstrap_sample, bootstrap_i)
+  }
+  
+  return(bootstrap_sample)
+}
+
+#' calculate statistic of the bootstrap sample
+#'
+#' @param dat: input data
+#'
+#' @return: the estimated mean of the stratified bootstrap sample
+boot <- function(dat) {
+  # get the bootstrap sample
+  dat <- strat_sampling(dat)
+  
+  # calculate the mean by origin and return back
+  return(tapply(dat$air_time, dat$origin, mean))
+}
+```
+
+### Non-parallel processing
+
+```{r}
+system.time(res1 <- lapply(seq_len(reps), function(x) boot(flights)))
+```
+
+Generate the table of mean and confidence interval.
+
+```{r}
+res_matrix1 <- do.call(rbind, res1)
+mean_values1 <- colMeans(res_matrix1)
+ci_lower1 <- mean_values1 - 1.96 * apply(res_matrix1, 2, sd)
+ci_upper1 <- mean_values1 + 1.96 * apply(res_matrix1, 2, sd)
+
+summary_df1 <- data.frame(
+  CI_lower = ci_lower1,
+  Mean = mean_values1,
+  CI_upper = ci_upper1
+)
+
+summary_df1
+```
+
+### Parallel processing
+
+```{r}
+library(parallel)
+system.time(res2 <- mclapply(seq_len(reps), function(x) boot(flights), mc.cores = 8))
+```
+
+```{r}
+res_matrix2 <- do.call(rbind, res2)
+mean_values2 <- colMeans(res_matrix2)
+ci_lower2 <- mean_values2 - 1.96 * apply(res_matrix2, 2, sd)
+ci_upper2 <- mean_values2 + 1.96 * apply(res_matrix2, 2, sd)
+
+summary_df2 <- data.frame(
+  CI_lower = ci_lower2,
+  Mean = mean_values2,
+  CI_upper = ci_upper2
+)
+
+summary_df2
+```
+
+### Future package
+
+Load the package.
+
+```{r}
+library(future)
+plan(multisession)
+```
+
+```{r}
+# a list to store results
+res3 <- list()
+
+# explicit call of future
+system.time(for (i in 1:reps) {
+  res3[[i]] <- future(boot(flights))
+})
+```
+
+```{r}
+# get the value inside
+res3 <- lapply(res3, value)
+res_matrix3 <- do.call(rbind, res3)
+mean_values3 <- colMeans(res_matrix3)
+ci_lower3 <- apply(res_matrix3, 2, function(x) quantile(x, 0.025))
+ci_upper3 <- apply(res_matrix3, 2, function(x) quantile(x, 0.975))
+
+summary_df3 <- data.frame(
+  Mean = mean_values3,
+  CI_lower = ci_lower3,
+  CI_upper = ci_upper3
+)
+
+summary_df3
+```
+
+Future is the fastest method. Parallel processing using `mclapply` is about two time faster than non-parallel process.
