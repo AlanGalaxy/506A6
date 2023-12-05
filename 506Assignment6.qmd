@@ -40,14 +40,15 @@ reps <- 1000
 #' @return: a stratified bootstrap sample
 strat_sampling <- function(dat) {
   # store the new stratified bootstrap sample
-  bootstrap_sample <- data.frame()
+  bootstrap_sample <- list()
   
   # get each category and sample from it
   for (i in unique(dat$dest)) {
     sample_i <- dat[dat$dest == i, ]
-    bootstrap_i <- sample_i[sample(nrow(sample_i), replace = TRUE), ]
-    bootstrap_sample <- rbind(bootstrap_sample, bootstrap_i)
+    bootstrap_sample[[i]] <- sample_i[sample(nrow(sample_i), replace = TRUE), ]
   }
+  
+  bootstrap_sample <- do.call(rbind, bootstrap_sample)
   
   return(bootstrap_sample)
 }
@@ -132,7 +133,7 @@ system.time(for (i in 1:reps) {
 
 ```{r}
 # get the value inside
-res3 <- lapply(res3, value)
+suppressWarnings(res3 <- lapply(res3, value))
 res_matrix3 <- do.call(rbind, res3)
 mean_values3 <- colMeans(res_matrix3)
 ci_lower3 <- apply(res_matrix3, 2, function(x) quantile(x, 0.025))
@@ -147,4 +148,12 @@ summary_df3 <- data.frame(
 summary_df3
 ```
 
-Future is the fastest method. Parallel processing using `mclapply` is about two time faster than non-parallel process.
+Parallel processing and Future are basically the same.
+
+Parallel processing using `mclapply` is about three time faster than non-parallel processing using lapply.
+
+-   non-parallel process: 1200s
+
+-   parallel processing: 300s
+
+-   future: 300s
